@@ -1,0 +1,67 @@
+{
+  "general": {
+    "name": { "en": "SCT" },
+    "version": "0.1.0",
+    "vendor": "NeuroPoly",
+    "information": { "en": "Spinal Cord Toolbox (SCT): automatic spinal cord segmentation with sct_deepseg spinalcord (contrast-agnostic)" },
+    "id": "SCT",
+    "regulatory_information": {
+      "device_trade_name": "SCT",
+      "production_identifier": "0.1.0",
+      "manufacturer_address": "https://github.com/neuropoly/openrecon-sct",
+      "made_in": "NeuroPoly, Polytechnique Montreal, Canada",
+      "manufacture_date": "2026-11-05",
+      "material_number": "SCT_0.1.0",
+      "gtin": "",
+      "udi": "",
+      "safety_advices": "For research use only. Not for diagnostic use.",
+      "special_operating_instructions": "Input must be a magnitude image series covering the spinal cord. Segmentation runs on CPU and may take a few minutes.",
+      "additional_relevant_information": "Based on Spinal Cord Toolbox https://spinalcordtoolbox.com"
+    }
+  },
+  "reconstruction": {
+    "transfer_protocol": {
+      "protocol": "ISMRMRD",
+      "version": "1.4.1"
+    },
+    "port": 9002,
+    "emitter": "image",
+    "injector": "image",
+    "can_process_adjustment_data": false,
+    "can_use_gpu": false,
+    "min_count_required_gpus": 0,
+    "min_required_gpu_memory": 2048,
+    "min_required_memory": 16384,
+    "min_count_required_cpu_cores": 4,
+    "content_qualification_type": "RESEARCH"
+  },
+  "parameters": [
+    {
+      "id": "SCTCommand",
+      "type": "choice",
+      "label": { "en": "SCT command" },
+      "values": [
+        {
+          "id": "DeepsegSpinalcord",
+          "name": { "en": "sct_deepseg spinalcord" }
+        }
+      ],
+      "default": "DeepsegSpinalcord",
+      "information": { "en": "SCT processing to run on the incoming images" }
+    },
+    {
+      "id": "SaveOriginalImages",
+      "label": { "en": "Save original images" },
+      "type": "boolean",
+      "information": { "en": "Also send back the original images (no suffix), in addition to the processed series" },
+      "default": true
+    },
+    {
+      "id": "SaveOverlay",
+      "label": { "en": "Save overlay" },
+      "type": "boolean",
+      "information": { "en": "Also send back the original images with the segmentation contour burned in (suffix _SCTOverlay)" },
+      "default": true
+    }
+  ]
+}

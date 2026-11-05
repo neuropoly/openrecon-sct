@@ -161,3 +161,7 @@ desktop.ini
 .Spotlight-V100
 .Trashes
 
+
+# SCT
+sct_*/
+*.nii.gz

@@ -49,7 +49,7 @@ def check_git() -> None:
         sys.exit(1)
 
 
-def check_docker() -> None:
+def check_docker(skip_version_check: bool = False) -> None:
     logger = logging.getLogger()
 
     # docker ?
@@ -72,7 +72,12 @@ def check_docker() -> None:
     docker_version = matches[0].split('.')[0] # 20.21.22 -> 20
     maximum_docker_version = 25
     if int(docker_version) >= maximum_docker_version:
+        if skip_version_check:
+            logger.warning(f'Docker version {docker_version} is too high (Siemens allows maximum version: {maximum_docker_version}), '
+                           'but the check is skipped (--skip-docker-version-check). The image may not load on the scanner.')
+            return
         logger.info(f'Docker version {docker_version} is too high. Siemens allows maximum version: {maximum_docker_version}')
+        logger.info('Use --skip-docker-version-check to build anyway (at your own risk)')
         sys.exit(1)
     logger.info(f'Docker version {docker_version}<={maximum_docker_version} is ok')
 
@@ -101,7 +106,7 @@ def build_server(repo_dockerfile_path: str) -> None:
         # build docker image for python-ismrmrd-server
         # this image is the starting point, that will be refined latter
         logger.info('building docker image `python-ismrmrd-server`')
-        subprocess.run(['docker', 'build', '--tag', 'python-ismrmrd-server', '--file', repo_dockerfile_path, './'], check=True)
+        subprocess.run(['docker', 'build', '--platform', 'linux/amd64', '--tag', 'python-ismrmrd-server', '--file', repo_dockerfile_path, './'], check=True)
 
 
 def check_target_dir(target_path: str) -> dict:
@@ -214,7 +219,7 @@ def main(args: argparse.Namespace):
     print_section('SYSTEM DEPENDENCIES')
     check_zip()
     check_git()
-    check_docker()
+    check_docker(skip_version_check=args.skip_docker_version_check)
 
     # python-ismrmrd-server : clone & build docker image
     print_section('CLONE & BUILD SERVER')
@@ -305,6 +310,24 @@ def main(args: argparse.Namespace):
         f'# import python-ismrmrd-server as starting point',
         f'FROM python-ismrmrd-server AS base',
         f'',
+        f'# System dependencies for the SCT installer (it also needs $SHELL to be set)',
+        f'ENV SHELL=/bin/bash',
+        f'RUN apt-get update && apt-get install -y --no-install-recommends gcc curl && \\',
+        f'    apt-get clean && rm -rf /var/lib/apt/lists/*',
+        f'',
+        f'# Python modules for the OpenRecon server process (NIfTI I/O)',
+        f'RUN pip3 --no-cache-dir install nibabel',
+        f'',
+        f'# Install Spinal Cord Toolbox (CPU version of PyTorch), in its own conda env',
+        f'RUN git clone --depth 1 --branch {args.sct_version} https://github.com/spinalcordtoolbox/spinalcordtoolbox /opt/sct && \\',
+        f'    cd /opt/sct && ./install_sct -iyc && \\',
+        f'    rm -rf /opt/sct/.git /opt/sct/python/pkgs /root/.cache',
+        f'ENV SCT_DIR=/opt/sct',
+        f'ENV PATH=/opt/sct/bin:$PATH',
+        f'',
+        f'# Download the deep learning models at build time: the scanner has no internet access',
+        f'RUN sct_deepseg spinalcord -install && rm -rf /root/.cache',
+        f'',
         f'# mandatory for OpenRecon (see OR documentation)',
         f'LABEL "com.siemens-healthineers.magneticresonance.openrecon.metadata:1.1.0"="{encoded_json_content}"',
         f'',
@@ -321,7 +344,7 @@ def main(args: argparse.Namespace):
         
     # build docker image
     logger.info(f"building docker image `{build_data['name']['docker']}` from Docker file {build_data['path']['docker']}")
-    subprocess.run(['docker', 'build', '--tag', build_data['name']['docker'], '--file', build_data['path']['docker'], cwd], check=True)
+    subprocess.run(['docker', 'build', '--platform', 'linux/amd64', '--tag', build_data['name']['docker'], '--file', build_data['path']['docker'], cwd], check=True)
 
     # save docker image in a .tar
     logger.info(f"(1/2) saving image `{build_data['name']['docker']}` in a .tar {build_data['path']['tar']}")
@@ -364,7 +387,17 @@ if __name__ == '__main__':
         '--dirname',
         type    = dir_path,
         help    = 'Application directory name. ex: `demo-i2i`, `app`',
-        default = 'demo-i2i'
+        default = 'app'
+    )
+    parser.add_argument(
+        '--sct-version',
+        help    = 'Spinal Cord Toolbox version (git tag) to install in the image',
+        default = '7.3'
+    )
+    parser.add_argument(
+        '--skip-docker-version-check',
+        action  = 'store_true',
+        help    = 'Build even if the local Docker version is higher than what Siemens allows',
     )
 
     args = parser.parse_args()
