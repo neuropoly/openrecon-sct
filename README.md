@@ -40,16 +40,7 @@ To add an SCT command: add a choice in [app/or-sct_json_ui.json](app/or-sct_json
 
 The app is packaged as a `.zip` (Docker image + PDF) on a build workstation, then copied and installed on the MR scanner host.
 
-```mermaid
-flowchart LR
-    subgraph WS["Workstation"]
-        A["python build.py"] --> B["ZIP package"]
-    end
-    subgraph MR["MR scanner (XA60+)"]
-        C["Install"] --> D["Run protocol"]
-    end
-    B -- "USB" --> C
-```
+<p align="center"><img src="doc/installation.svg" alt="Build the ZIP package on a workstation with python build.py, copy it by USB to the MR scanner (XA60+), install it, then run the protocol"></p>
 
 ### Build
 
