@@ -35,32 +35,23 @@ Non-magnitude images (e.g. phase) are passed through unchanged.
 
 To add an SCT command: add a choice in [app/or-sct_json_ui.json](app/or-sct_json_ui.json) (`SCTCommand` parameter) and map it in `SCT_COMMANDS` / `process_image()` in [app/or-sct.py](app/or-sct.py).
 
-## Overview: from source to scanner
 
+## Installation
+
+The app is packaged as a `.zip` (Docker image + PDF) on a build workstation, then copied and installed on the MR scanner host.
+
+```mermaid
+flowchart LR
+    subgraph WS["Build workstation (Linux / macOS / Windows)"]
+        A["python build.py<br/>Docker + internet"] --> B["OpenRecon_NeuroPoly_SCT_Vx.y.z.zip"]
+    end
+    subgraph MR["MR scanner host (syngo MR XA60+)"]
+        C["Install package"] --> D["Select SCT in the protocol<br/>and run the sequence"]
+    end
+    B -- "USB / network" --> C
 ```
-┌──────────────────────────────┐   .zip (USB / network)   ┌─────────────────────────────┐
-│ Build workstation            │ ───────────────────────▶ │ MR scanner host (MRAWP)     │
-│ Linux / macOS / Windows      │                          │ syngo MR XA60 or later      │
-│ Docker + Python + internet   │                          │ install package, then use   │
-│ `python build.py`            │                          │ it from the protocol        │
-└──────────────────────────────┘                          └─────────────────────────────┘
-```
 
-**The build is NOT done on the scanner.** The syngo console has no Docker, no internet, and must not be used for development. Build the package on any workstation with Docker and internet access, then copy the resulting `.zip` to the scanner and install it there.
-
-What the build does ([build.py](build.py)):
-
-1. Clones [python-ismrmrd-server](https://github.com/kspaceKelvin/python-ismrmrd-server) (pinned commit) and builds its Docker image (`python-ismrmrd-server`). This image is the base: the MRD server that talks to the scanner reconstruction pipeline.
-2. Validates [app/or-sct_json_ui.json](app/or-sct_json_ui.json) against the OpenRecon schema ([app/OpenReconSchema_1.1.0.json](app/OpenReconSchema_1.1.0.json)).
-3. Writes a Dockerfile (`build/OpenRecon_NeuroPoly_SCT_V<version>.Dockerfile`) that:
-   - installs SCT (`install_sct`, CPU PyTorch) in `/opt/sct`, and downloads the `sct_deepseg spinalcord` model (the scanner is offline);
-   - embeds the UI JSON (base64) in the image label `com.siemens-healthineers.magneticresonance.openrecon.metadata:1.1.0`, which is how the scanner discovers the app name, version and UI parameters;
-   - copies [app/or-sct.py](app/or-sct.py) and sets it as the default config of the MRD server.
-4. Builds the image for `linux/amd64` and saves it with `docker save` to a `.tar`.
-5. Generates a small `.pdf` (vendor, name, version), which OpenRecon requires next to the image.
-6. Zips the `.tar` and `.pdf` into `build/OpenRecon_NeuroPoly_SCT_V<version>.zip`. **This zip is the deliverable.**
-
-## Build
+### Build
 
 Requirements:
 - Python ≥ 3.10 with `jsonschema` (`pip install jsonschema`)
@@ -74,27 +65,37 @@ Options:
 - `--sct-version 7.3`: SCT release (git tag) installed in the image
 - `--skip-docker-version-check`: build even with Docker ≥ 25. Siemens documents a maximum Docker version (`docker save` format changed in Docker 25), so check that the resulting image loads on your scanner software version.
 
-The image is always built for `linux/amd64` (the MR host architecture), including on Apple Silicon (slow, via emulation). SCT and the deep learning model are installed at build time because the scanner has no internet access. The image is large (several GB) because of SCT + PyTorch (CPU).
+Output: `build/OpenRecon_NeuroPoly_SCT_V<version>.zip`. **This zip is the file to install on the scanner.**
 
-Output: `build/OpenRecon_NeuroPoly_SCT_V<version>.zip`. Upload that file to the scanner (see below).
+What [build.py](build.py) does:
+
+1. Clones [python-ismrmrd-server](https://github.com/kspaceKelvin/python-ismrmrd-server) (pinned commit) and builds its Docker image (`python-ismrmrd-server`). This image is the base: the MRD server that talks to the scanner reconstruction pipeline.
+2. Validates [app/or-sct_json_ui.json](app/or-sct_json_ui.json) against the OpenRecon schema ([app/OpenReconSchema_1.1.0.json](app/OpenReconSchema_1.1.0.json)).
+3. Writes a Dockerfile (`build/OpenRecon_NeuroPoly_SCT_V<version>.Dockerfile`) that:
+   - installs SCT (`install_sct`, CPU PyTorch) in `/opt/sct`, and downloads the `sct_deepseg spinalcord` model (the scanner has no internet access);
+   - embeds the UI JSON (base64) in the image label `com.siemens-healthineers.magneticresonance.openrecon.metadata:1.1.0`, which is how the scanner discovers the app name, version and UI parameters;
+   - copies [app/or-sct.py](app/or-sct.py) and sets it as the default config of the MRD server.
+4. Builds the image for `linux/amd64` (the MR host architecture, also on Apple Silicon, where it is slow because of emulation) and saves it with `docker save` to a `.tar`. The image is large (several GB) because of SCT + PyTorch.
+5. Generates a small `.pdf` (vendor, name, version), which OpenRecon requires next to the image.
+6. Zips the `.tar` and `.pdf`.
 
 To bump the version, edit `version`, `production_identifier` and `material_number` in [app/or-sct_json_ui.json](app/or-sct_json_ui.json): the scanner identifies packages by vendor + id + version.
 
-## Install on the scanner
+### Install on the scanner
 
 > [!IMPORTANT]
 > Requires the OpenRecon option on the scanner (syngo MR XA60 or later) and appropriate research agreement with Siemens. Coordinate with your MR physicist / Siemens collaboration manager before installing anything on the MR host. The procedure below is the community-documented one (see [neurodesk/openrecon](https://github.com/neurodesk/openrecon)); refer to the official Siemens OpenRecon documentation on [magnetom.net](https://www.magnetom.net) for your software version.
 
 Copy the `.zip` to the MR host (USB stick or network share). **Do not unzip it.** Close any open protocol first (an open protocol can block the installation).
 
-### XA60 / XA61
+#### XA60 / XA61
 
 1. Copy the zip into:
    `C:\Program Files\Siemens\Numaris\OperationalManagement\FileTransfer\incoming`
 2. Wait for the zip to disappear from `incoming`: the OpenRecon watcher picks it up and loads the image.
 3. Monitor progress in `C:\ProgramData\Siemens\Numaris\log\syngo.MR.HostInfra.OpenRecon.Watcher`: a log file named after the package is created (0 KB), then grows (~100–200 KB) once installed. Loading a multi-GB image takes several minutes.
 
-### XA70 and later (e.g. XB10)
+#### XA70 and later (e.g. XB10)
 
 1. Exit kiosk mode on the MRAWP (`Tab` + `Del` + `Num +`).
 2. Copy the zip to e.g. `C:\Temp\OR\Packages`.
@@ -106,7 +107,7 @@ Copy the `.zip` to the MR host (USB stick or network share). **Do not unzip it.*
    ```
    Repeat `store --list` until the package shows as installed.
 
-### Use it
+## Usage on the scanner
 
 1. Open a protocol covering the spinal cord (e.g. sagittal or axial T2w, T2*w, T1w; the model is contrast-agnostic).
 2. In the protocol parameters, enable OpenRecon and select **SCT** (vendor NeuroPoly). Set the parameters (*SCT command*, *Save original images*, *Save overlay*).
