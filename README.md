@@ -42,13 +42,13 @@ The app is packaged as a `.zip` (Docker image + PDF) on a build workstation, the
 
 ```mermaid
 flowchart LR
-    subgraph WS["Build workstation (Linux / macOS / Windows)"]
-        A["python build.py<br/>Docker + internet"] --> B["OpenRecon_NeuroPoly_SCT_Vx.y.z.zip"]
+    subgraph WS["Workstation"]
+        A["python build.py"] --> B["ZIP package"]
     end
-    subgraph MR["MR scanner host (syngo MR XA60+)"]
-        C["Install package"] --> D["Select SCT in the protocol<br/>and run the sequence"]
+    subgraph MR["MR scanner (XA60+)"]
+        C["Install"] --> D["Run protocol"]
     end
-    B -- "USB / network" --> C
+    B -- "USB" --> C
 ```
 
 ### Build
