@@ -44,11 +44,27 @@ The app is packaged as a `.zip` (Docker image + PDF) on a build workstation, the
 
 ### Build
 
+Build on a Linux x86_64 machine (e.g. a lab server). Building on Apple Silicon works but is slow (amd64 emulation) and recent Docker Desktop versions are above the Siemens limit.
+
 Requirements:
 - Python ≥ 3.10 with `jsonschema` (`pip install jsonschema`)
-- `git`, `zip`, Docker
+- `git`, `zip`, Docker ≤ 24
+- ~30 GB of free disk space (Docker layers + `.tar` + `.zip`)
+
+Check the machine:
 
 ```bash
+docker --version   # 24.x or older (otherwise build.py stops, see --skip-docker-version-check)
+uname -m           # x86_64
+df -h .            # ~30 GB free
+python3 --version  # >= 3.10
+```
+
+Build:
+
+```bash
+git clone https://github.com/neuropoly/openrecon-sct && cd openrecon-sct
+pip install jsonschema
 python build.py
 ```
 
@@ -69,6 +85,16 @@ What [build.py](build.py) does:
 4. Builds the image for `linux/amd64` (the MR host architecture, also on Apple Silicon, where it is slow because of emulation) and saves it with `docker save` to a `.tar`. The image is large (several GB) because of SCT + PyTorch.
 5. Generates a small `.pdf` (vendor, name, version), which OpenRecon requires next to the image.
 6. Zips the `.tar` and `.pdf`.
+
+Before going to the scanner, check that SCT and the model work inside the image (the second command downloads SCT example data inside the container and segments it):
+
+```bash
+docker run --rm --entrypoint sct_check_dependencies openrecon_neuropoly_sct:v0.1.0
+docker run --rm --entrypoint bash openrecon_neuropoly_sct:v0.1.0 -c \
+  "cd /tmp && sct_download_data -d sct_example_data && sct_deepseg spinalcord -i sct_example_data/t2/t2.nii.gz"
+```
+
+The image tag is `openrecon_<vendor>_<id>:v<version>` (lowercase), from [app/or-sct_json_ui.json](app/or-sct_json_ui.json).
 
 To bump the version, edit `version`, `production_identifier` and `material_number` in [app/or-sct_json_ui.json](app/or-sct_json_ui.json): the scanner identifies packages by vendor + id + version.
 
